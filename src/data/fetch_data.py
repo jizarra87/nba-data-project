@@ -2,6 +2,7 @@ import pandas as pd
 from nba_api.stats.static import teams
 from nba_api.stats.endpoints import leaguegamefinder
 
+#branch merge validation. 
 # Function to fetch NBA teams
 def fetch_nba_teams():
     nba_teams = teams.get_teams()
