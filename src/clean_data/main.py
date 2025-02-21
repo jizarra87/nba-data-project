@@ -1,7 +1,7 @@
 import os
-from src.data_loader import load_latest_data
-from src.data_cleaner import clean_data
-from src.data_saver import save_cleaned_data
+from data_loader import load_latest_data
+from data_cleaner import clean_data
+from data_saver import save_cleaned_data
 
 def main():
     # Define the data directory (adjust if necessary)
