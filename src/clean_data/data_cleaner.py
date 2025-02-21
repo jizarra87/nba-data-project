@@ -46,6 +46,6 @@ def clean_data(df):
         df_cleaned = df_cleaned.withColumn(f"{stat}_LAST5", avg(col(stat)).over(window_spec.rowsBetween(-5, -1)))
     
     # Compute rest days between consecutive games (casting GAME_DATE to long for subtraction)
-    df_cleaned = df_cleaned.withColumn("REST_DAYS", col("GAME_DATE").cast("long") - lag("GAME_DATE", 1).over(window_spec).cast("long"))
+    #df_cleaned = df_cleaned.withColumn("REST_DAYS", col("GAME_DATE").cast("long") - lag("GAME_DATE", 1).over(window_spec).cast("long"))
     
     return df_cleaned
