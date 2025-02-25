@@ -1,5 +1,6 @@
 import pandas as pd
 from pyspark.sql import SparkSession
+import re
 
 def extract_rival(matchup):
     if pd.isnull(matchup):
@@ -28,8 +29,10 @@ def clean_data(df):
     - Computes rolling averages and rest days.
     """
     spark = SparkSession.builder.getOrCreate()
-    df = spark.createDataFrame(df)
+    #df = spark.createDataFrame(df)
 
+    df = df.toPandas()
+    df['GAME_DATE'] = pd.to_datetime(df['GAME_DATE'])
     df = df[df['GAME_DATE'] >='2014-08-01']
 
     df = df.dropna()
@@ -79,9 +82,7 @@ def clean_data(df):
 
     columns = stat_columns_away + stat_columns_home + ['WL_away']
 
-    df_cleaned = df_joined[columns]
-
-    df_cleaned = df_cleaned.toPandas()
+    df_cleaned = spark.createDataFrame(df_joined[columns])
 
 
     return df_cleaned
