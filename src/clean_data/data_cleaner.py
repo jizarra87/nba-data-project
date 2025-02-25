@@ -1,5 +1,21 @@
-from pyspark.sql.functions import col, when, avg, lag
-from pyspark.sql.window import Window
+import pandas as pd
+from pyspark.sql import SparkSession
+
+def extract_rival(matchup):
+    if pd.isnull(matchup):
+        return None
+    # For home games with "vs"
+    if "vs" in matchup:
+        rival = matchup.split("vs")[-1].strip()
+        # Remove any leading punctuation (like a period) and extra whitespace
+        rival = re.sub(r"^\W+", "", rival)
+        return rival
+    # For away games with "@"
+    elif "@" in matchup:
+        rival = matchup.split("@")[-1].strip()
+        return rival
+    else:
+        return None
 
 def clean_data(df):
     """
@@ -11,41 +27,61 @@ def clean_data(df):
     - Fills missing performance metrics.
     - Computes rolling averages and rest days.
     """
-    # Filter to keep only regular season games (SEASON_ID starting with "2")
-    df_cleaned = df.filter(col("SEASON_ID").cast("string").startswith("2"))
+    spark = SparkSession.builder.getOrCreate()
+    df = spark.createDataFrame(df)
+
+    df = df[df['GAME_DATE'] >='2014-08-01']
+
+    df = df.dropna()
+
+    df['WL'] = df['WL'].str.strip()
+
+    df['WL'] = df['WL'].map({'W':1,'L':0})
+
+    df['HOME_AWAY'] = df['MATCHUP'].apply(lambda x: 'A' if '@' in x else 'H')
+
+    df["RIVAL"] = df["MATCHUP"].apply(extract_rival)
+
+    # Convert GAME_DATE to datetime and sort by TEAM_ID and GAME_DATE
+    df['GAME_DATE'] = pd.to_datetime(df['GAME_DATE'])
+    df = df.sort_values(['TEAM_ID', 'GAME_DATE'])
+
+    # List of stat columns for which to compute last 5 games average
+    stat_columns = [
+        "PTS", "FGM", "FGA", "FG_PCT", "FG3M", "FG3A", "FG3_PCT",
+        "FTM", "FTA", "FT_PCT", "OREB", "DREB", "REB", "AST",
+        "STL", "BLK", "TOV", "PF", "PLUS_MINUS"
+    ]
+
+    # For each column, compute the rolling average of the last 5 games (excluding the current game) 
+    for col_name in stat_columns:
+        new_col = col_name + "_LAST5"
+        df[new_col] = (df.groupby("TEAM_ID")[col_name]
+                         .apply(lambda x: x.shift(1).rolling(window=5, min_periods=1).mean())
+                         .reset_index(level=0, drop=True))
+
+    df = df.dropna()
+
+    df = df[df['SEASON_ID'].astype(str).str.startswith('2')]
+
+    df_away = df[df['HOME_AWAY'] == 'A']
+    df_home = df[df['HOME_AWAY'] == 'H']
     
-    # Further filter to include only seasons from 2014 onward
-    df_cleaned = df_cleaned.filter(col("SEASON_ID") >= 22014)
-    
-    # Drop rows with missing critical values
-    df_cleaned = df_cleaned.dropna(subset=["SEASON_ID", "TEAM_ID", "GAME_ID", "GAME_DATE"])
-    
-    # Convert 'WL' to binary WIN column (1 for Win, 0 for Loss)
-    df_cleaned = df_cleaned.withColumn("WIN", when(col("WL") == "W", 1).otherwise(0))
-    
-    # Extract Home/Away indicator from MATCHUP column
-    df_cleaned = df_cleaned.withColumn("HOME_AWAY", when(col("MATCHUP").like("%vs%"), "H").otherwise("A"))
-    
-    # Fill missing values for performance metrics
-    df_cleaned = df_cleaned.fillna({
-        "FG_PCT": 0, 
-        "FG3_PCT": 0, 
-        "FT_PCT": 0, 
-        "REB": 0, 
-        "AST": 0, 
-        "STL": 0, 
-        "BLK": 0, 
-        "TOV": 0
-    })
-    
-    # Define window for rolling averages (last 5 games per TEAM_ID)
-    window_spec = Window.partitionBy("TEAM_ID").orderBy(col("GAME_DATE"))
-    
-    # Compute rolling averages for key stats (PTS, AST, REB, FG_PCT)
-    for stat in ["PTS", "AST", "REB", "FG_PCT"]:
-        df_cleaned = df_cleaned.withColumn(f"{stat}_LAST5", avg(col(stat)).over(window_spec.rowsBetween(-5, -1)))
-    
-    # Compute rest days between consecutive games (casting GAME_DATE to long for subtraction)
-    #df_cleaned = df_cleaned.withColumn("REST_DAYS", col("GAME_DATE").cast("long") - lag("GAME_DATE", 1).over(window_spec).cast("long"))
-    
+    df_joined = df_away.merge(
+    df_home, 
+    left_on=["GAME_ID"], 
+    right_on=["GAME_ID"],
+    suffixes=('_away', '_home')
+)
+    stat_columns_away = [f"{col}_LAST5_away" for col in stat_columns]
+
+    stat_columns_home = [f"{col}_LAST5_home" for col in stat_columns]
+
+    columns = stat_columns_away + stat_columns_home + ['WL_away']
+
+    df_cleaned = df_joined[columns]
+
+    df_cleaned = df_cleaned.toPandas()
+
+
     return df_cleaned
