@@ -5,8 +5,8 @@ import joblib
 df = pd.read_csv('/home/ji/NBA_Project/data/data_28_02_2025.csv')
 df['GAME_DATE'] = pd.to_datetime(df['GAME_DATE'])
 
-away = input('away')
-home = input('home')
+away = input('away: ')
+home = input('home: ')
 df_away = df[df['TEAM_ABBREVIATION']== away]
 # Sort by GAME_DATE in descending order
 df_away.sort_values(by='GAME_DATE', ascending=False, inplace = True)

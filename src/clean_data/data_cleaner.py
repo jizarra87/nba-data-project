@@ -80,7 +80,7 @@ def clean_data(df):
 
     stat_columns_home = [f"{col}_LAST5_home" for col in stat_columns]
 
-    columns = stat_columns_away + stat_columns_home + ['WL_away']
+    columns = stat_columns_away + stat_columns_home + ['WL_away','GAME_ID']
 
     df_cleaned = spark.createDataFrame(df_joined[columns])
 
